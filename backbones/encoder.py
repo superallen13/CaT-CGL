@@ -1,5 +1,4 @@
 from backbones.gnn import GNN
-import torch.nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from torch_geometric.typing import torch_sparse
@@ -18,18 +17,30 @@ def gcn_norm(adj_t):
     return adj_t
 
 
+class Linear(GCNConv):
+    def __init__(
+        self,
+        in_channels: int,
+        out_channels: int
+    ):
+        super().__init__(in_channels, out_channels)
+    
+    def forward(self, x):
+        return self.lin(x)
+    
+
 class Encoder(GNN):
     def __init__(self, nin, nhid, nout, nlayers, hop):
         super().__init__()
         self.feat_agg = None
         self.hop = hop
         if nlayers == 1:
-            self.layers.append(torch.nn.Linear(nin, nout))
+            self.layers.append(Linear(nin, nout))
         else:
-            self.layers.append(torch.nn.Linear(nin, nhid))  # input layers
+            self.layers.append(Linear(nin, nhid))  # input layers
             for _ in range(nlayers - 2):
-                self.layers.append(torch.nn.Linear(nhid, nhid))  # hidden layers
-            self.layers.append(torch.nn.Linear(nhid, nout))  # output layers
+                self.layers.append(Linear(nhid, nhid))  # hidden layers
+            self.layers.append(Linear(nhid, nout))  # output layers
 
     def encode_without_e(self, x):
         self.eval()

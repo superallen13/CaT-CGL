@@ -38,7 +38,7 @@ class GNN(torch.nn.Module):
         x += torch.sign(x) * F.normalize(random_noise, dim=-1) * 0.1
         return x
 
-def train_node_classifier(model, data, optimizer, n_epoch=200, incremental_cls=None, focal=0, weight=None):
+def train_node_classifier(model, data, optimizer, n_epoch=200, incremental_cls=None):
     model.train()
     for epoch in range(n_epoch):
         if incremental_cls:
@@ -46,24 +46,7 @@ def train_node_classifier(model, data, optimizer, n_epoch=200, incremental_cls=N
         else:
             out = model(data) 
         
-        # loss_w_ = []
-        # last_cls = torch.unique(data.y)[-1]
-        # for i in range(last_cls + 1):
-        #     loss_w_.append(1.0 ** (last_cls - i))
-
-        # device = f"cuda:{out.get_device()}"
-        # loss_w_ = torch.tensor(loss_w_).to(device)
-
-        # criterion = FocalLoss(gamma=focal, weights=loss_w_)
-        # classes = torch.unique(data.y)
-        # weights = torch.tensor([1 / len(classes)] * len(classes))
-        # weights = torch.tensor([5] * len(classes))
-        # criterion = FocalLoss(gamma=focal, weights=weights.to(f"cuda:{out.get_device()}"))
-
-        # m = torch.nn.Softmax(dim=-1)
-        # loss = criterion(m(out)[data.train_mask], data.y[data.train_mask])
-
-        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask], weight=weight)
+        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
 
         optimizer.zero_grad()
         loss.backward()

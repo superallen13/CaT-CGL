@@ -6,7 +6,6 @@ from methods.joint import Joint
 from methods.ergnn import ERGNN
 from methods.ssm import SSM
 from methods.cgm import CGM
-from methods.lwf import LwF
 
 
 def get_result_file_name(args):
@@ -19,16 +18,7 @@ def get_result_file_name(args):
     elif "cgm" in args.cgl_method:
         cgm_args = eval(args.cgm_args)
         result_name = f"_{cgm_args['feat_init']}_feat_{cgm_args['feat_lr']}_{cgm_args['n_encoders']}_{cgm_args['n_layers']}_layer_{cgm_args['hid_dim']}_GCN_hop_{cgm_args['hop']}"
-    elif args.cgl_method == "lwf":
-        result_name = "_lwf"
-    if args.unlabeled_rate > 0:
-        result_name += f"_unlabel_{args.unlabeled_rate}"
-    if args.pseudo_label:
-        result_name += "_pseudo_label"
-    if args.focal_gamma:
-        return f"{args.task}_{args.dataset_name}_{args.budget}_{args.cgl_method}" + result_name + f"_focal_{args.focal_gamma}"
-    else:
-        return f"{args.task}_{args.dataset_name}_{args.budget}_{args.cgl_method}" + result_name
+    return f"{args.dataset_name}_{args.budget}_{args.cgl_method}" + result_name
 
 def print_performance_matrix(performace_matrix, m_update):
     for k in range(performace_matrix.shape[0]):
@@ -58,7 +48,7 @@ def get_dataset(args):
     return dataset
     
 def get_backbone_model(dataset, data_stream, args):
-    model = GCN(dataset.num_features, 256, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
+    model = GCN(dataset.num_features, 512, data_stream.n_tasks * args.cls_per_task, 3).to(args.device)
     return model
 
 def get_cgl_model(model, data_stream, args):

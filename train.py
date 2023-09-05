@@ -81,24 +81,15 @@ def main():
         model = get_backbone_model(dataset, data_stream, args)
         cgl_model = get_cgl_model(model, data_stream, args)
         
-        weight = []
         for k in range(len(memory_bank)):
             if args.retrain:
                 model.initialize()
             opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
         
-            replayed_graphs = Batch.from_data_list(memory_bank[:k+1].append(cgl_model.tasks[k]))
+            replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
             replayed_graphs.to(args.device, "x", "y", "adj_t")
 
-            weight += [1] * args.cls_per_task
-            weight = torch.tensor(weight, dtype=torch.float32).to(args.device)
-            weight = weight / weight.sum()
-
-            # train
-            if args.task_balance:
-                model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=torch.unique(replayed_graphs.y)[-1]+1, focal=args.focal_gamma, weight=weight)
-            else:
-                model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=torch.unique(replayed_graphs.y)[-1]+1, focal=args.focal_gamma)
+            model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=torch.unique(replayed_graphs.y)[-1]+1)
 
             # Save the GPU memory for the evaluation phase.
             replayed_graphs.cpu() 
