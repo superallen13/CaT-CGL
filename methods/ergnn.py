@@ -16,7 +16,7 @@ class ERGNN(Replay):
             ids_per_cls_train.append(cls_train_mask.nonzero(as_tuple=True)[0].tolist())
 
         # init a encoder
-        encoder = GCN(task.num_features, 256, 128, 1).to(self.device)
+        encoder = GCN(task.num_features, 512, 256, 2).to(self.device)
         emb = encoder.encode(task.x.to(self.device), task.adj_t.to(self.device))
 
         centers = [emb[ids].mean(0) for ids in ids_per_cls_train]

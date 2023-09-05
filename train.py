@@ -48,7 +48,7 @@ def main():
     if os.path.exists(task_file):
         data_stream = torch.load(task_file)
     else:
-        data_stream = Streaming(args.task, args.cls_per_task, dataset, args.unlabeled_rate)
+        data_stream = Streaming(args.cls_per_task, dataset)
         torch.save(data_stream, task_file)
 
     # Get memory banks.
