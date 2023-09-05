@@ -5,7 +5,7 @@ from backbones.gcn import GCN
 from methods.joint import Joint
 from methods.ergnn import ERGNN
 from methods.ssm import SSM
-from methods.cgm import CGM, CGMZ
+from methods.cgm import CGM
 from methods.lwf import LwF
 
 
@@ -70,9 +70,4 @@ def get_cgl_model(model, data_stream, args):
         cgl_model = SSM(model, data_stream.tasks, args.budget, args.m_update, args.device, args.focal_gamma, args.pseudo_label, args.retrain)
     elif args.cgl_method == "cgm":
         cgl_model = CGM(model, data_stream.tasks, args.budget, args.m_update, args.device, args.focal_gamma, args.pseudo_label, args.retrain, eval(args.cgm_args))
-    elif args.cgl_method == "cgmz":  # Pass aggregated features to MLPs.
-        cgl_model = CGMZ(model, data_stream.tasks, args.budget, args.m_update, args.device, args.focal_gamma, args.pseudo_label, args.retrain, eval(args.cgm_args))
-    elif args.cgl_method == "lwf":
-        cgl_model = LwF(model, data_stream.tasks, args.device, args.focal_gamma)
-    
     return cgl_model

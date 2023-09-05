@@ -1,11 +1,11 @@
 from backbones.gnn import GNN
+import torch.nn
 import torch.nn.functional as F
 from torch_geometric.nn import GCNConv
 from torch_geometric.typing import torch_sparse
 
 
 def gcn_norm(adj_t):
-
     adj_t = torch_sparse.fill_diag(adj_t, 1.)  # add self-loops.
     
     # Normalization.
@@ -18,30 +18,18 @@ def gcn_norm(adj_t):
     return adj_t
 
 
-class GCNConvX(GCNConv):
-    def __init__(
-        self,
-        in_channels: int,
-        out_channels: int,
-        **kwargs,
-    ):
-        super().__init__(in_channels, out_channels, **kwargs)
-    
-    def forward(self, x):
-        return self.lin(x)
-
-
-class MLP(GNN):
-    def __init__(self, nin, nhid, nout, nlayers):
+class Encoder(GNN):
+    def __init__(self, nin, nhid, nout, nlayers, hop):
         super().__init__()
         self.feat_agg = None
+        self.hop = hop
         if nlayers == 1:
-            self.layers.append(GCNConvX(nin, nout))
+            self.layers.append(torch.nn.Linear(nin, nout))
         else:
-            self.layers.append(GCNConvX(nin, nhid))  # input layers
+            self.layers.append(torch.nn.Linear(nin, nhid))  # input layers
             for _ in range(nlayers - 2):
-                self.layers.append(GCNConvX(nhid, nhid))  # hidden layers
-            self.layers.append(GCNConvX(nhid, nout))  # output layers
+                self.layers.append(torch.nn.Linear(nhid, nhid))  # hidden layers
+            self.layers.append(torch.nn.Linear(nhid, nout))  # output layers
 
     def encode_without_e(self, x):
         self.eval()
@@ -50,10 +38,10 @@ class MLP(GNN):
             x = F.relu(x)
         return x
 
-    def encode(self, x, adj_t, hop=1):
+    def encode(self, x, adj_t):
         if self.feat_agg is None:
             adj_t = gcn_norm(adj_t)
-            for _ in range(hop):
+            for _ in range(self.hop):
                 x = self.layers[0].propagate(adj_t, x=x)
             self.feat_agg = x
 
