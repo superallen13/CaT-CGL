@@ -1,0 +1,181 @@
+# DL and GL
+import torch
+import torch.nn.functional as F
+from torch_geometric.data import Data
+from torch_sparse import SparseTensor
+
+# Own modules
+from methods.replay import Replay
+from backbones.gcn import GCN
+from backbones.mlp import MLP
+from methods.utility import get_graph_class_ratio
+from backbones.gnn import train_node_classifier
+
+# Utilities
+from torch_geometric.loader import NeighborLoader
+from .utility import *
+import random
+from progressbar import progressbar
+
+
+class CGM(Replay):
+    def __init__(self, model, tasks, budget, m_update, device, focal, pseudo_label, retrain, args):
+        super().__init__(model, tasks, budget, m_update, device, focal, pseudo_label, retrain)
+        self.n_encoders = args['n_encoders']
+        self.feat_lr = args['feat_lr']
+        self.hid_dim = args['hid_dim']
+        self.emb_dim = args['emb_dim']
+        self.n_layers = args['n_layers']
+        self.feat_init = "randomChoice"
+        self.feat_init = args["feat_init"]
+        
+    def memorize(self, task, budgets):
+        labels_cond = []
+        for i, cls in enumerate(task.classes):
+            labels_cond += [cls] * budgets[i]
+        labels_cond = torch.tensor(labels_cond)
+
+        feat_cond = torch.nn.Parameter(torch.FloatTensor(sum(budgets), task.num_features))
+        feat_cond = self._initialize_feature(task, budgets, feat_cond, self.feat_init)
+
+        replayed_graph = self._condense(task, feat_cond, labels_cond, budgets)
+        return replayed_graph
+    
+    def _initialize_feature(self, task, budgets, feat_cond, method="randomChoice"):
+        if method == "randomNoise":
+            torch.nn.init.xavier_uniform_(feat_cond)
+        elif method == "randomChoice":
+            sampled_ids = []
+            for i, cls in enumerate(task.classes):
+                train_mask = task.train_mask
+                train_mask_at_cls = (task.y == cls).logical_and(train_mask)
+                ids_at_cls = train_mask_at_cls.nonzero(as_tuple=True)[0].tolist()
+                sampled_ids += random.choices(ids_at_cls, k=budgets[i])
+            sampled_feat = task.x[sampled_ids]
+            feat_cond.data.copy_(sampled_feat)
+        elif method == "kMeans":
+            sampled_ids = []
+            for i, cls in enumerate(task.classes):
+                train_mask = task.train_mask
+                train_mask_at_cls = (task.y == cls).logical_and(train_mask)
+                ids_at_cls = train_mask_at_cls.nonzero(as_tuple=True)[0].tolist()
+                sampled_ids += query(task, ids_at_cls, budgets[i], self.device)
+            sampled_feat = task.x[sampled_ids]
+            feat_cond.data.copy_(sampled_feat)
+        return feat_cond
+
+    def _condense(self, task, feat_cond, labels_cond, budgets):
+        opt_feat = torch.optim.Adam([feat_cond], lr=self.feat_lr)
+
+        # batch_size = 0
+
+        # unlabeled_rate = 0.8
+        # train_mask = torch.ones(task.train_mask.shape[0], dtype=torch.bool)
+        # for cls in task.classes:
+        #     cls_ids = torch.nonzero(task.pseudo_label == cls).squeeze().tolist()
+        #     train_size = len(cls_ids)
+        #     unlabeled_num = int(train_size * unlabeled_rate)
+        #     labeled_num = train_size - unlabeled_num
+        #     batch_size += labeled_num
+        #     unlabeled_ids = random.sample(cls_ids, k=labeled_num)
+        #     train_mask[unlabeled_ids] = True
+
+        # loader = NeighborLoader(
+        #     task,
+        #     # Sample 30 neighbors for each node for 2 iterations
+        #     num_neighbors=[0],
+        #     # Use a batch size of 128 for sampling training nodes
+        #     batch_size=256,
+        #     input_nodes=train_mask,
+        # )
+
+        # task = next(iter(loader))
+
+        cls_train_masks = []
+        cls_ratios = []
+        self_loops = SparseTensor.eye(sum(budgets), sum(budgets)).t()
+
+        for cls in task.classes:
+            if self.pseudo_label:
+                cls_train_masks.append((task.pseudo_labels == cls))
+            else:
+                cls_train_masks.append((task.y == cls).logical_and(task.train_mask))
+            
+            # cls_ratios.append(get_graph_class_ratio(task, cls))
+
+        encoder = GCN(task.num_features, self.hid_dim, self.emb_dim, self.n_layers).to(self.device)
+
+        # for _ in tqdm(range(self.n_encoders), leave=False):
+        for _ in range(self.n_encoders):
+            encoder.initialize()
+            with torch.no_grad():
+                emb_real = encoder.encode(task.x.to(self.device), task.adj_t.to(self.device))
+            emb_cond = encoder.encode(feat_cond.to(self.device), self_loops.to(self.device))
+
+            emb_real = F.normalize(emb_real)
+            emb_cond = F.normalize(emb_cond)
+
+            # Start the loss calculation
+            loss = torch.tensor(0.).to(self.device)
+            for i, cls in enumerate(task.classes):
+                real_emb_at_class = emb_real[cls_train_masks[i]]
+                cond_emb_at_class = emb_cond[labels_cond == cls]
+                dist = torch.mean(real_emb_at_class, 0) - torch.mean(cond_emb_at_class, 0)
+                loss += torch.sum(dist ** 2)
+        
+            # Update the feature matrix
+            opt_feat.zero_grad()
+            loss.backward()
+            opt_feat.step()
+
+        # Wrap the graph data object
+        replayed_graph = Data(x=feat_cond.detach().cpu(), 
+                              y=labels_cond, 
+                              adj_t=self_loops)
+        replayed_graph.train_mask = torch.ones(sum(budgets), dtype=torch.bool)
+        return replayed_graph
+
+class CGMZ(CGM):
+    def __init__(self, model, tasks, budget, m_update, device, focal, pseudo_label, retrain, args):
+        super().__init__(model, tasks, budget, m_update, device, focal, pseudo_label, retrain, args)
+        self.hop = args['hop']
+    
+    def _condense(self, task, feat_cond, labels_cond, budgets):
+        self_loops = SparseTensor.eye(sum(budgets), sum(budgets)).t()
+        opt_feat = torch.optim.Adam([feat_cond], lr=self.feat_lr)
+
+        cls_train_masks = []
+        for cls in task.classes:
+            if self.pseudo_label:
+                cls_train_masks.append((task.pseudo_labels == cls))
+            else:
+                cls_train_masks.append((task.y == cls).logical_and(task.train_mask))
+        
+        encoder = MLP(task.num_features, self.hid_dim, self.emb_dim, self.n_layers).to(self.device)
+        for _ in range(self.n_encoders):
+            encoder.initialize()
+            with torch.no_grad():
+                emb_real = encoder.encode(task.x.to(self.device), task.adj_t.to(self.device), hop=self.hop)
+                emb_real = F.normalize(emb_real)
+            emb_cond = encoder.encode_without_e(feat_cond.to(self.device))
+            emb_cond = F.normalize(emb_cond)
+
+            loss = torch.tensor(0.).to(self.device)
+            for i, cls in enumerate(task.classes):
+                real_emb_at_class = emb_real[cls_train_masks[i]]
+                cond_emb_at_class = emb_cond[labels_cond == cls]
+                
+                dist = torch.mean(real_emb_at_class, 0) - torch.mean(cond_emb_at_class, 0)
+                loss += torch.sum(dist ** 2)
+        
+            # Update the feature matrix
+            opt_feat.zero_grad()
+            loss.backward()
+            opt_feat.step()
+
+        # Wrap the graph data object
+        replayed_graph = Data(x=feat_cond.detach().cpu(), 
+                              y=labels_cond, 
+                              adj_t=self_loops)
+        replayed_graph.train_mask = torch.ones(sum(budgets), dtype=torch.bool)
+        return replayed_graph
