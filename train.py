@@ -82,9 +82,18 @@ def main():
         cgl_model = get_cgl_model(model, data_stream, args)
         
         for k in range(len(memory_bank)):
+            tasks = cgl_model.tasks
             if args.retrain:
                 model.initialize()
             opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+
+            if args.tim:
+                replayed_graphs = Batch.from_data_list(memory_bank)
+            else:
+                if k == 0:
+                    replayed_graphs = Batch.from_data_list([tasks[0]])
+                else:
+                    replayed_graphs = Batch.from_data_list(memory_bank[:-1] + [tasks[k]])
         
             replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
             replayed_graphs.to(args.device, "x", "y", "adj_t")
@@ -96,8 +105,6 @@ def main():
 
             # Test the model from task 0 to task k
             accs = []
-            tasks = cgl_model.tasks
-            weight = []
             for k_ in range(k + 1):
                 task_ = tasks[k_].to(args.device, "x", "y", "adj_t")
                 acc = eval_node_classifier(model, task_) * 100
@@ -105,10 +112,6 @@ def main():
                 task_.to("cpu")
                 print(f"T{k_} {acc:.2f}",end="|")
                 performace_matrix[k, k_] = acc
-                if k_ == k:
-                    weight += [1] * args.cls_per_task
-                else:
-                    weight += [1 / ((performace_matrix[k_, k_] - acc) / performace_matrix[k_, k_])] * args.cls_per_task
             AP = sum(accs) / len(accs)
             print(f"AP: {AP:.2f}")
         APs.append(AP)
