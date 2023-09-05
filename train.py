@@ -81,7 +81,7 @@ def main():
 
             if args.tim:
                 if args.m_update == "all":
-                    replayed_graphs = Batch.from_data_list(memory_bank)
+                    replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
                 elif args.m_update == "onlyCurrent":
                     replayed_graphs = Batch.from_data_list([memory_bank[-1]])
             else:
