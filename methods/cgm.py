@@ -19,8 +19,8 @@ from progressbar import progressbar
 
 
 class CGM(Replay):
-    def __init__(self, model, tasks, budget, m_update, device, focal, pseudo_label, retrain, args):
-        super().__init__(model, tasks, budget, m_update, device, focal, pseudo_label, retrain)
+    def __init__(self, model, tasks, budget, m_update, device, args):
+        super().__init__(model, tasks, budget, m_update, device)
         self.n_encoders = args['n_encoders']
         self.feat_lr = args['feat_lr']
         self.hid_dim = args['hid_dim']

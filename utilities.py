@@ -53,11 +53,11 @@ def get_backbone_model(dataset, data_stream, args):
 
 def get_cgl_model(model, data_stream, args):
     if args.cgl_method == "joint":
-        cgl_model = Joint(model, data_stream.tasks, None, args.m_update, args.device, args.focal_gamma, args.pseudo_label, args.retrain)
+        cgl_model = Joint(model, data_stream.tasks, None, args.m_update, args.device)
     elif args.cgl_method == "ergnn":
-        cgl_model = ERGNN(model, data_stream.tasks, args.budget, args.m_update, args.device, args.focal_gamma, args.pseudo_label, args.retrain)
+        cgl_model = ERGNN(model, data_stream.tasks, args.budget, args.m_update, args.device)
     elif args.cgl_method == "ssm":
-        cgl_model = SSM(model, data_stream.tasks, args.budget, args.m_update, args.device, args.focal_gamma, args.pseudo_label, args.retrain)
+        cgl_model = SSM(model, data_stream.tasks, args.budget, args.m_update, args.device)
     elif args.cgl_method == "cgm":
-        cgl_model = CGM(model, data_stream.tasks, args.budget, args.m_update, args.device, args.focal_gamma, args.pseudo_label, args.retrain, eval(args.cgm_args))
+        cgl_model = CGM(model, data_stream.tasks, args.budget, args.m_update, args.device, eval(args.cgm_args))
     return cgl_model

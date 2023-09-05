@@ -18,7 +18,6 @@ def main():
     parser.add_argument('--data-dir', type=str, default="./data")
     parser.add_argument('--dataset-name', type=str, default="corafull")
     parser.add_argument('--cls-per-task', type=int, default=2)
-    parser.add_argument('--unlabeled-rate', type=float, default=0.0)
 
     # Argumnets for CGL methods.
     parser.add_argument('--tim', action='store_true')
@@ -27,10 +26,6 @@ def main():
     parser.add_argument('--budget', type=int, default=2)
     parser.add_argument('--m-update', type=str, default="all")
     parser.add_argument('--cgm-args', type=str, default="{}")
-    parser.add_argument('--focal-gamma', type=float, default="0")
-    parser.add_argument('--pseudo-label', action='store_true')
-    parser.add_argument('--retrain', action='store_true')
-    parser.add_argument('--task-balance', action='store_true')
 
     # Others
     parser.add_argument('--device', type=str, default="cuda:0")
@@ -49,7 +44,7 @@ def main():
     result_file_name = get_result_file_name(args)
     memory_bank_file_name = os.path.join(args.result_path, "memory_bank" , result_file_name)
 
-    task_file = os.path.join(args.data_dir, "streaming", f"{args.dataset_name}_unlabeled_{args.unlabeled_rate}.streaming")
+    task_file = os.path.join(args.data_dir, "streaming", f"{args.dataset_name}.streaming")
     dataset = get_dataset(args)
     if os.path.exists(task_file):
         data_stream = torch.load(task_file)
@@ -67,12 +62,13 @@ def main():
             model = get_backbone_model(dataset, data_stream, args)
             cgl_model = get_cgl_model(model, data_stream, args)
 
-            memory_bank, performace_matrix = cgl_model.train(args.cls_epoch, tim=args.tim)
+            memory_bank, performace_matrix = cgl_model.observer()
             memory_banks.append(memory_bank)
             torch.save(memory_bank, memory_bank_file_name + f"_repeat_{i}")
     
     # Evaluate memory banks.
     APs = []
+    AFs = []
     for i in range(args.repeat):
         memory_bank = memory_banks[i]
         # Initialize the performance matrix.
@@ -82,22 +78,12 @@ def main():
         cgl_model = get_cgl_model(model, data_stream, args)
         
         for k in range(len(memory_bank)):
-            tasks = cgl_model.tasks
-            if args.retrain:
-                model.initialize()
             opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
-
-            if args.tim:
-                replayed_graphs = Batch.from_data_list(memory_bank)
-            else:
-                if k == 0:
-                    replayed_graphs = Batch.from_data_list([tasks[0]])
-                else:
-                    replayed_graphs = Batch.from_data_list(memory_bank[:-1] + [tasks[k]])
         
             replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
             replayed_graphs.to(args.device, "x", "y", "adj_t")
 
+            # train
             model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=torch.unique(replayed_graphs.y)[-1]+1)
 
             # Save the GPU memory for the evaluation phase.
@@ -105,17 +91,25 @@ def main():
 
             # Test the model from task 0 to task k
             accs = []
+            AF = 0
+            tasks = cgl_model.tasks
             for k_ in range(k + 1):
                 task_ = tasks[k_].to(args.device, "x", "y", "adj_t")
                 acc = eval_node_classifier(model, task_) * 100
                 accs.append(acc)
                 task_.to("cpu")
-                print(f"T{k_} {acc:.2f}",end="|")
+                print(f"T{k_} {acc:.2f}", end="|")
                 performace_matrix[k, k_] = acc
             AP = sum(accs) / len(accs)
-            print(f"AP: {AP:.2f}")
+            print(f"AP: {AP:.2f}", end=", ")
+            for t in range(k):
+                AF += performace_matrix[k, t] - performace_matrix[t, t]
+            AF = AF / k if k != 0 else AF
+            print(f"AF: {AF:.2f}")
         APs.append(AP)
+        AFs.append(AF)
     print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}")
+    print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}")
 
 
 if __name__ == '__main__':

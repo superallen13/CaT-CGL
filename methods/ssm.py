@@ -61,8 +61,8 @@ class degree_based_sampler(torch.nn.Module):
         return list(set(retained_nodes))
 
 class SSM(Replay):
-    def __init__(self, model, tasks, budget, m_update, device, focal):
-        super().__init__(model, tasks, budget, m_update, device, focal)
+    def __init__(self, model, tasks, budget, m_update, device):
+        super().__init__(model, tasks, budget, m_update, device)
 
     def memorize(self, task, budgets):
         classes = torch.unique(task.y)
