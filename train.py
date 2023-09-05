@@ -14,10 +14,11 @@ from backbones.gnn import train_node_classifier, eval_node_classifier
 
 def main():
     parser = argparse.ArgumentParser()
-    # Arguments for datasets.
-    parser.add_argument('--data-dir', type=str, default="./data")
+    # Arguments for data.
     parser.add_argument('--dataset-name', type=str, default="corafull")
     parser.add_argument('--cls-per-task', type=int, default=2)
+    parser.add_argument('--data-dir', type=str, default="./data")
+    parser.add_argument('--result-path', type=str, default="./results")
 
     # Argumnets for CGL methods.
     parser.add_argument('--tim', action='store_true')
@@ -31,8 +32,6 @@ def main():
     parser.add_argument('--device', type=str, default="cuda:0")
     parser.add_argument('--repeat', type=int, default=1)
     parser.add_argument('--seed', type=int, default=1024)
-    parser.add_argument('--result-path', type=str, default="./results")
-    parser.add_argument('--task', type=str, default="cl")
     parser.add_argument('--rewrite', action='store_true')
 
     args = parser.parse_args()
@@ -43,8 +42,8 @@ def main():
     # Get file names.
     result_file_name = get_result_file_name(args)
     memory_bank_file_name = os.path.join(args.result_path, "memory_bank" , result_file_name)
-
     task_file = os.path.join(args.data_dir, "streaming", f"{args.dataset_name}.streaming")
+
     dataset = get_dataset(args)
     if os.path.exists(task_file):
         data_stream = torch.load(task_file)
@@ -76,11 +75,21 @@ def main():
 
         model = get_backbone_model(dataset, data_stream, args)
         cgl_model = get_cgl_model(model, data_stream, args)
-        
+        tasks = cgl_model.tasks
         for k in range(len(memory_bank)):
             opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+
+            if args.tim:
+                if args.m_update == "all":
+                    replayed_graphs = Batch.from_data_list(memory_bank)
+                elif args.m_update == "onlyCurrent":
+                    replayed_graphs = Batch.from_data_list([memory_bank[-1]])
+            else:
+                if k == 0:
+                    replayed_graphs = Batch.from_data_list([tasks[k]])
+                else:
+                    replayed_graphs = Batch.from_data_list(memory_bank[:-1] + [tasks[k]])
         
-            replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
             replayed_graphs.to(args.device, "x", "y", "adj_t")
 
             # train
@@ -92,7 +101,6 @@ def main():
             # Test the model from task 0 to task k
             accs = []
             AF = 0
-            tasks = cgl_model.tasks
             for k_ in range(k + 1):
                 task_ = tasks[k_].to(args.device, "x", "y", "adj_t")
                 acc = eval_node_classifier(model, task_) * 100

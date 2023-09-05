@@ -71,10 +71,7 @@ class CGM(Replay):
 
         cls_train_masks = []
         for cls in task.classes:
-            if self.pseudo_label:
-                cls_train_masks.append((task.pseudo_labels == cls))
-            else:
-                cls_train_masks.append((task.y == cls).logical_and(task.train_mask))
+            cls_train_masks.append((task.y == cls).logical_and(task.train_mask))   
         
         encoder = Encoder(task.num_features, self.hid_dim, self.emb_dim, self.n_layers, self.hop).to(self.device)
         for _ in range(self.n_encoders):

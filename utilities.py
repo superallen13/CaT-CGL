@@ -48,7 +48,7 @@ def get_dataset(args):
     return dataset
     
 def get_backbone_model(dataset, data_stream, args):
-    model = GCN(dataset.num_features, 512, data_stream.n_tasks * args.cls_per_task, 3).to(args.device)
+    model = GCN(dataset.num_features, 256, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
     return model
 
 def get_cgl_model(model, data_stream, args):
