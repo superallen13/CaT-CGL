@@ -44,15 +44,32 @@ def train_node_classifier(model, data, optimizer, n_epoch=200, incremental_cls=N
     ce = torch.nn.CrossEntropyLoss()
     for epoch in range(n_epoch):
         if incremental_cls:
-            out = model(data)[:, incremental_cls[0]:incremental_cls[1]]
+            out = model(data)[:, 0:incremental_cls[1]]
         else:
             out = model(data) 
         
-        loss = ce(out[data.train_mask], data.y[data.train_mask]-incremental_cls[0])
+        loss = ce(out[data.train_mask], data.y[data.train_mask])
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
+    return model
+
+def train_node_classifier_batch(model, batches, optimizer, n_epoch=200, incremental_cls=None):
+    model.train()
+    ce = torch.nn.CrossEntropyLoss()
+    for epoch in range(n_epoch):
+        for data in batches:
+            if incremental_cls:
+                out = model(data)[:, 0:incremental_cls[1]]
+            else:
+                out = model(data) 
+            
+            loss = ce(out[data.train_mask], data.y[data.train_mask])
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
     return model
 
 def eval_node_classifier(model, data, incremental_cls=None):

@@ -9,7 +9,7 @@ import numpy as np
 from utilities import *
 from data_stream import Streaming
 from torch_geometric.data import Batch
-from backbones.gnn import train_node_classifier, eval_node_classifier
+from backbones.gnn import train_node_classifier, train_node_classifier_batch, eval_node_classifier
 
 
 def evaluate(args, dataset, data_stream, memory_banks):
@@ -26,25 +26,28 @@ def evaluate(args, dataset, data_stream, memory_banks):
         for k in range(len(memory_bank)):
             opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
 
-            if args.tim:
-                if args.m_update == "all":
-                    replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
-                elif args.m_update == "onlyCurrent":
-                    replayed_graphs = Batch.from_data_list([memory_bank[-1]])
-            else:
-                if k == 0:
-                    replayed_graphs = Batch.from_data_list([tasks[k]])
-                else:
-                    replayed_graphs = Batch.from_data_list(memory_bank[:-1] + [tasks[k]])
-        
-            replayed_graphs.to(args.device, "x", "y", "adj_t")
-
             # train
-            max_cls = torch.unique(replayed_graphs.y)[-1]
-            model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
-
-            # Save the GPU memory for the evaluation phase.
-            replayed_graphs.cpu() 
+            if args.dataset_name == "products" and args.cgl_method == "joint":
+                max_cls = torch.unique(memory_bank[k].y)[-1]
+                batches = memory_bank[:k+1]
+                for data in batches:
+                    data.to(args.device)
+                model = train_node_classifier_batch(model, batches, opt, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
+            else:
+                if args.tim:
+                    if args.m_update == "all":
+                        replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
+                    elif args.m_update == "onlyCurrent":
+                        replayed_graphs = Batch.from_data_list([memory_bank[-1]])
+                else:
+                    if k == 0:
+                        replayed_graphs = Batch.from_data_list([tasks[k]])
+                    else:
+                        replayed_graphs = Batch.from_data_list(memory_bank[:-1] + [tasks[k]])
+        
+                replayed_graphs.to(args.device, "x", "y", "adj_t")
+                max_cls = torch.unique(replayed_graphs.y)[-1]
+                model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
 
             # Test the model from task 0 to task k
             accs = []
