@@ -19,7 +19,8 @@ class GNN(torch.nn.Module):
             x = layer(x, adj_t)
             x = F.relu(x)
         x = self.layers[-1](x, adj_t)
-        return F.log_softmax(x, dim=1)
+        return x
+        # return F.log_softmax(x, dim=1)
 
     def encode(self, x, adj_t):
         self.eval()
@@ -40,22 +41,23 @@ class GNN(torch.nn.Module):
 
 def train_node_classifier(model, data, optimizer, n_epoch=200, incremental_cls=None):
     model.train()
+    ce = torch.nn.CrossEntropyLoss()
     for epoch in range(n_epoch):
         if incremental_cls:
-            out = model(data)[:, :incremental_cls]
+            out = model(data)[:, incremental_cls[0]:incremental_cls[1]]
         else:
             out = model(data) 
         
-        loss = F.nll_loss(out[data.train_mask], data.y[data.train_mask])
+        loss = ce(out[data.train_mask], data.y[data.train_mask]-incremental_cls[0])
 
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
     return model
 
-def eval_node_classifier(model, data):
+def eval_node_classifier(model, data, incremental_cls=None):
     model.eval()
-    pred = model(data)[data.test_mask].argmax(dim=1)
-    correct = (pred == data.y[data.test_mask]).sum()
+    pred = model(data)[data.test_mask, incremental_cls[0]:incremental_cls[1]].argmax(dim=1)
+    correct = (pred == data.y[data.test_mask]-incremental_cls[0]).sum()
     acc = int(correct) / int(data.test_mask.sum())
     return acc

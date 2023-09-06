@@ -11,6 +11,7 @@ from data_stream import Streaming
 from torch_geometric.data import Batch
 from backbones.gnn import train_node_classifier, eval_node_classifier
 
+
 def evaluate(args, dataset, data_stream, memory_banks):
     APs = []
     AFs = []
@@ -21,17 +22,6 @@ def evaluate(args, dataset, data_stream, memory_banks):
         model = get_backbone_model(dataset, data_stream, args)
         cgl_model = get_cgl_model(model, data_stream, args)
         tasks = cgl_model.tasks
-
-        if args.IL == "taskIL":
-            for task in tasks:
-                classes = torch.unique(task.y)
-                for i, cls in enumerate(classes):
-                    task.y[task.y == cls] = i
-                    
-            for memory in memory_bank:
-                classes = torch.unique(memory.y)
-                for i, cls in enumerate(classes):
-                    memory.y[memory.y == cls] = i
 
         for k in range(len(memory_bank)):
             opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
@@ -50,7 +40,8 @@ def evaluate(args, dataset, data_stream, memory_banks):
             replayed_graphs.to(args.device, "x", "y", "adj_t")
 
             # train
-            model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=torch.unique(replayed_graphs.y)[-1]+1)
+            max_cls = torch.unique(replayed_graphs.y)[-1]
+            model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
 
             # Save the GPU memory for the evaluation phase.
             replayed_graphs.cpu() 
@@ -60,7 +51,11 @@ def evaluate(args, dataset, data_stream, memory_banks):
             AF = 0
             for k_ in range(k + 1):
                 task_ = tasks[k_].to(args.device, "x", "y", "adj_t")
-                acc = eval_node_classifier(model, task_) * 100
+                if args.IL == "classIL":
+                    acc = eval_node_classifier(model, task_, incremental_cls=(0, max_cls+1)) * 100
+                else:
+                    max_cls = torch.unique(task_.y)[-1]
+                    acc = eval_node_classifier(model, task_, incremental_cls=(max_cls+1-data_stream.cls_per_task, max_cls+1)) * 100
                 accs.append(acc)
                 task_.to("cpu")
                 print(f"T{k_} {acc:.2f}", end="|")
@@ -131,59 +126,6 @@ def main():
             torch.save(memory_bank, memory_bank_file_name + f"_repeat_{i}")
     
     evaluate(args, dataset, data_stream, memory_banks)
-    # Evaluate memory banks.
-    # APs = []
-    # AFs = []
-    # for i in range(args.repeat):
-    #     memory_bank = memory_banks[i]
-    #     # Initialize the performance matrix.
-    #     performace_matrix = torch.zeros(len(memory_bank), len(memory_bank))
-
-    #     model = get_backbone_model(dataset, data_stream, args)
-    #     cgl_model = get_cgl_model(model, data_stream, args)
-    #     tasks = cgl_model.tasks
-    #     for k in range(len(memory_bank)):
-    #         opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
-
-    #         if args.tim:
-    #             if args.m_update == "all":
-    #                 replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
-    #             elif args.m_update == "onlyCurrent":
-    #                 replayed_graphs = Batch.from_data_list([memory_bank[-1]])
-    #         else:
-    #             if k == 0:
-    #                 replayed_graphs = Batch.from_data_list([tasks[k]])
-    #             else:
-    #                 replayed_graphs = Batch.from_data_list(memory_bank[:-1] + [tasks[k]])
-        
-    #         replayed_graphs.to(args.device, "x", "y", "adj_t")
-
-    #         # train
-    #         model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=torch.unique(replayed_graphs.y)[-1]+1)
-
-    #         # Save the GPU memory for the evaluation phase.
-    #         replayed_graphs.cpu() 
-
-    #         # Test the model from task 0 to task k
-    #         accs = []
-    #         AF = 0
-    #         for k_ in range(k + 1):
-    #             task_ = tasks[k_].to(args.device, "x", "y", "adj_t")
-    #             acc = eval_node_classifier(model, task_) * 100
-    #             accs.append(acc)
-    #             task_.to("cpu")
-    #             print(f"T{k_} {acc:.2f}", end="|")
-    #             performace_matrix[k, k_] = acc
-    #         AP = sum(accs) / len(accs)
-    #         print(f"AP: {AP:.2f}", end=", ")
-    #         for t in range(k):
-    #             AF += performace_matrix[k, t] - performace_matrix[t, t]
-    #         AF = AF / k if k != 0 else AF
-    #         print(f"AF: {AF:.2f}")
-    #     APs.append(AP)
-    #     AFs.append(AF)
-    # print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}")
-    # print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}")
 
 
 if __name__ == '__main__':
