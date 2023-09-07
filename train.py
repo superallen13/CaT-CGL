@@ -40,10 +40,7 @@ def evaluate(args, dataset, data_stream, memory_banks):
                     elif args.m_update == "onlyCurrent":
                         replayed_graphs = Batch.from_data_list([memory_bank[-1]])
                 else:
-                    if k == 0:
-                        replayed_graphs = Batch.from_data_list([tasks[k]])
-                    else:
-                        replayed_graphs = Batch.from_data_list(memory_bank[:-1] + [tasks[k]])
+                    replayed_graphs = Batch.from_data_list(memory_bank[:k] + [tasks[k]])
         
                 replayed_graphs.to(args.device, "x", "y", "adj_t")
                 max_cls = torch.unique(replayed_graphs.y)[-1]
