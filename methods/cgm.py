@@ -15,7 +15,7 @@ from backbones.gnn import train_node_classifier
 from torch_geometric.loader import NeighborLoader
 from .utility import *
 import random
-from progressbar import progressbar
+# from progressbar import progressbar
 
 
 class CGM(Replay):
@@ -33,6 +33,10 @@ class CGM(Replay):
     def memorize(self, task, budgets):
         labels_cond = []
         for i, cls in enumerate(task.classes):
+            # cls_train_num = task.y[task.train_mask][task.y[task.train_mask]==cls].shape[0]
+            # print(cls_train_num)
+            # if cls_train_num < budgets[i]:
+            #     budgets[i] = cls_train_num
             labels_cond += [cls] * budgets[i]
         labels_cond = torch.tensor(labels_cond)
 

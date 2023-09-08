@@ -5,6 +5,7 @@ from torch_geometric import seed_everything
 # Utility
 import os
 import argparse
+import sys
 import numpy as np
 from utilities import *
 from data_stream import Streaming
@@ -12,9 +13,10 @@ from torch_geometric.data import Batch
 from backbones.gnn import train_node_classifier, train_node_classifier_batch, eval_node_classifier
 
 
-def evaluate(args, dataset, data_stream, memory_banks):
+def evaluate(args, dataset, data_stream, memory_banks, flush=True):
     APs = []
     AFs = []
+    Ps = []
     for i in range(args.repeat):
         memory_bank = memory_banks[i]
         # Initialize the performance matrix.
@@ -23,9 +25,8 @@ def evaluate(args, dataset, data_stream, memory_banks):
         cgl_model = get_cgl_model(model, data_stream, args)
         tasks = cgl_model.tasks
 
+        opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
         for k in range(len(memory_bank)):
-            opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
-
             # train
             if args.dataset_name == "products" and args.cgl_method == "joint":
                 max_cls = torch.unique(memory_bank[k].y)[-1]
@@ -58,18 +59,20 @@ def evaluate(args, dataset, data_stream, memory_banks):
                     acc = eval_node_classifier(model, task_, incremental_cls=(max_cls+1-data_stream.cls_per_task, max_cls+1)) * 100
                 accs.append(acc)
                 task_.to("cpu")
-                print(f"T{k_} {acc:.2f}", end="|")
+                print(f"T{k_} {acc:.2f}", end="|", flush=flush)
                 performace_matrix[k, k_] = acc
             AP = sum(accs) / len(accs)
-            print(f"AP: {AP:.2f}", end=", ")
+            print(f"AP: {AP:.2f}", end=", ", flush=flush)
             for t in range(k):
                 AF += performace_matrix[k, t] - performace_matrix[t, t]
             AF = AF / k if k != 0 else AF
-            print(f"AF: {AF:.2f}")
+            print(f"AF: {AF:.2f}", flush=flush)
         APs.append(AP)
         AFs.append(AF)
-    print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}")
-    print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}")
+        Ps.append(performace_matrix)
+    print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}", flush=flush)
+    print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}", flush=flush)
+    return Ps
 
 def main():
     parser = argparse.ArgumentParser()
@@ -125,7 +128,12 @@ def main():
             memory_banks.append(memory_bank)
             torch.save(memory_bank, memory_bank_file_name + f"_repeat_{i}")
     
-    evaluate(args, dataset, data_stream, memory_banks)
+    # Ps = evaluate(args, dataset, data_stream, memory_banks)
+    
+    # if args.tim:
+    #     torch.save(Ps, os.path.join(args.result_path, "performance", f"{result_file_name}_tim.pt"))
+    # else:
+    #     torch.save(Ps, os.path.join(args.result_path, "performance", f"{result_file_name}.pt"))
 
 
 if __name__ == '__main__':

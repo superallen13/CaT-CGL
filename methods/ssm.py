@@ -2,7 +2,7 @@ from methods.replay import Replay
 import torch
 import random
 from backbones.gcn import GCN
-from progressbar import progressbar
+# from progressbar import progressbar
 from torch_geometric.data import Data
 from torch_sparse import SparseTensor
 import copy

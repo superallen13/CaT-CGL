@@ -1,6 +1,6 @@
 from torch_geometric.transforms import RandomNodeSplit
 from torch_sparse import SparseTensor
-from progressbar import progressbar
+# from progressbar import progressbar
 import torch
 import random
 
@@ -15,7 +15,8 @@ class Streaming():
         graph = dataset[0]
         tasks = []
         n_tasks = int(dataset.num_classes / self.cls_per_task)
-        for k in progressbar(range(n_tasks), redirect_stdout=True):        
+        # for k in progressbar(range(n_tasks), redirect_stdout=True): 
+        for k in range(n_tasks):        
             start_cls = k * self.cls_per_task
             classes = list(range(start_cls, start_cls + self.cls_per_task))
             subset = sum(graph.y == cls for cls in classes).squeeze().nonzero(as_tuple=False)
