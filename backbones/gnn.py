@@ -39,14 +39,14 @@ class GNN(torch.nn.Module):
         x += torch.sign(x) * F.normalize(random_noise, dim=-1) * 0.1
         return x
 
-def train_node_classifier(model, data, optimizer, n_epoch=200, incremental_cls=None):
-    import wandb
-    wandb.init(
-        # set the wandb project where this run will be logged
-        project="CaT"
-    )
+def train_node_classifier(model, data, optimizer, weight=None, n_epoch=200, incremental_cls=None):
+    # import wandb
+    # wandb.init(
+    #     # set the wandb project where this run will be logged
+    #     project="CaT"
+    # )
     model.train()
-    ce = torch.nn.CrossEntropyLoss()
+    ce = torch.nn.CrossEntropyLoss(weight=weight)
     for epoch in range(n_epoch):
         if incremental_cls:
             out = model(data)[:, 0:incremental_cls[1]]
@@ -58,13 +58,12 @@ def train_node_classifier(model, data, optimizer, n_epoch=200, incremental_cls=N
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
-        loss_train = ce(out[data.train_mask], data.y[data.train_mask])
-        loss_val = ce(out[data.val_mask], data.y[data.val_mask])
-        loss_test = ce(out[data.test_mask], data.y[data.test_mask])
-        wandb.log({"loss_train": loss_train, 
-                   "loss_val": loss_val, 
-                   "loss_test": loss_test})
+        # loss_train = ce(out[data.train_mask], data.y[data.train_mask])
+        # loss_val = ce(out[data.val_mask], data.y[data.val_mask])
+        # loss_test = ce(out[data.test_mask], data.y[data.test_mask])
+        # wandb.log({"loss_train": loss_train, 
+        #            "loss_val": loss_val, 
+        #            "loss_test": loss_test})
     return model
 
 def train_node_classifier_batch(model, batches, optimizer, n_epoch=200, incremental_cls=None):
