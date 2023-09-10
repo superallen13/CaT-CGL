@@ -25,7 +25,7 @@ def evaluate(args, dataset, data_stream, memory_banks, flush=True):
         cgl_model = get_cgl_model(model, data_stream, args)
         tasks = cgl_model.tasks
 
-        opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
+        opt = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=5e-4)
         for k in range(len(memory_bank)):
             # train
             if args.dataset_name == "products" and args.cgl_method == "joint":
@@ -36,16 +36,31 @@ def evaluate(args, dataset, data_stream, memory_banks, flush=True):
                 model = train_node_classifier_batch(model, batches, opt, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
             else:
                 if args.tim:
-                    if args.m_update == "all":
-                        replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
-                    elif args.m_update == "onlyCurrent":
-                        replayed_graphs = Batch.from_data_list([memory_bank[-1]])
+                    replayed_graphs = memory_bank[:k+1]
+                    # if args.m_update == "all":
+                    #     # replayed_graphs = Batch.from_data_list(memory_bank[:k+1])
+                    #     replayed_graphs = memory_bank[:k+1]
+                    # elif args.m_update == "onlyCurrent":
+                    #     replayed_graphs = Batch.from_data_list([memory_bank[-1]])
                 else:
-                    replayed_graphs = Batch.from_data_list(memory_bank[:k] + [tasks[k]])
+                    # replayed_graphs = Batch.from_data_list(memory_bank[:k] + [tasks[k]])
+                    replayed_graphs = memory_bank[:k] + [tasks[k]]
+
+                max_cls = torch.unique(memory_bank[k].y)[-1]
+                batches = replayed_graphs
+                for data in batches:
+                    data.to(args.device)
+                model = train_node_classifier_batch(model, batches, opt, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
+
         
-                replayed_graphs.to(args.device, "x", "y", "adj_t")
-                max_cls = torch.unique(replayed_graphs.y)[-1]
-                model = train_node_classifier(model, replayed_graphs, opt, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
+                # replayed_graphs.to(args.device, "x", "y", "adj_t")
+                # max_cls = torch.unique(replayed_graphs.y)[-1]
+
+                # n_per_cls = [(replayed_graphs.y == cls).nonzero().sum() for cls in torch.unique(replayed_graphs.y)]
+                # loss_w_ = [1. / max(i, 1) for i in n_per_cls] 
+                # loss_w_ = torch.tensor(loss_w_).to(args.device)
+                # model = train_node_classifier(model, replayed_graphs, opt, weight=loss_w_, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
+                # model = train_node_classifier(model, replayed_graphs, opt, weight=None, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
 
             # Test the model from task 0 to task k
             accs = []
@@ -124,11 +139,11 @@ def main():
             model = get_backbone_model(dataset, data_stream, args)
             cgl_model = get_cgl_model(model, data_stream, args)
 
-            memory_bank, performace_matrix = cgl_model.observer()
+            memory_bank = cgl_model.observer()
             memory_banks.append(memory_bank)
             torch.save(memory_bank, memory_bank_file_name + f"_repeat_{i}")
     
-    # Ps = evaluate(args, dataset, data_stream, memory_banks)
+    Ps = evaluate(args, dataset, data_stream, memory_banks)
     
     # if args.tim:
     #     torch.save(Ps, os.path.join(args.result_path, "performance", f"{result_file_name}_tim.pt"))
