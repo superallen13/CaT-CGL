@@ -3,7 +3,7 @@ from torch_geometric.data import Batch
 from backbones.gnn import train_node_classifier, eval_node_classifier
 
 # Utilities
-# from progressbar import progressbar
+from progressbar import progressbar
 from methods.utility import get_graph_class_ratio
 from backbones.gcn import GCN
 
@@ -21,15 +21,15 @@ class Replay():
     def observer(self):
         tasks = self.tasks
 
-        performace_matrix = torch.zeros(len(tasks), len(tasks))
-        # for k in progressbar(range(len(tasks)), redirect_stdout=True):
-        for k in range(len(tasks)):
+        # performace_matrix = torch.zeros(len(tasks), len(tasks))
+        for k in progressbar(range(len(tasks)), redirect_stdout=True):
+        # for k in range(len(tasks)):
             task = tasks[k]
             # Get the replayed graph for the current task.
             replayed_graph = self.memorize(task, self.budgets[k])
             self.memory_bank.append(replayed_graph)  # Update the memory bank.
 
-        return self.memory_bank, performace_matrix
+        return self.memory_bank
     
     def memorize(self, task, budgets):
         raise NotImplementedError("Please implement this method!")
