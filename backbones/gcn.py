@@ -15,7 +15,6 @@ class GCN(GNN):
                 self.layers.append(GCNConv(nhid, nhid))  # hidden layers
             self.layers.append(GCNConv(nhid, nout))  # output layers
 
-
 def main():
     from backbones.gnn import train_node_classifier, eval_node_classifier
     from torch_geometric.datasets import CoraFull, Reddit

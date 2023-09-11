@@ -69,7 +69,7 @@ def train_node_classifier(model, data, optimizer, weight=None, n_epoch=200, incr
 def train_node_classifier_batch(model, batches, optimizer, n_epoch=200, incremental_cls=None):
     model.train()
     ce = torch.nn.CrossEntropyLoss()
-    for epoch in range(n_epoch):
+    for _ in range(n_epoch):
         for data in batches:
             if incremental_cls:
                 out = model(data)[:, 0:incremental_cls[1]]
@@ -82,6 +82,7 @@ def train_node_classifier_batch(model, batches, optimizer, n_epoch=200, incremen
             loss.backward()
             optimizer.step()
     return model
+
 
 def eval_node_classifier(model, data, incremental_cls=None):
     model.eval()
