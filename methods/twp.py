@@ -1,73 +1,82 @@
 import torch
 from torch_geometric.data import Batch
-from backbones.gnn import train_node_classifier, eval_node_classifier
+from torch import linalg as LA
+from backbones.gat import train_node_classifier, eval_node_classifier
 
 # Utilities
 from progressbar import progressbar
 from methods.utility import get_graph_class_ratio
 from backbones.gcn import GCN
 
-class MAS():
+class TWP():
     def __init__(self, model, tasks, device, args):
         super().__init__()
         self.model = model
         self.tasks = tasks
         self.device = device
         self.opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
-
-        # for MAS
-        self.reg = args['memory_strength']
-        self.fisher = []
-        self.optpar = []
         self.ce = torch.nn.CrossEntropyLoss()
-        self.n_seen_examples = 0
+
+        # setup memories
+        self.fisher_loss = {}
+        self.fisher_att = {}
+        self.optpar = {}
+        self.mem_mask = None
+        # hyper-parameters
+        self.lambda_l = args['lambda_l']
+        self.lambda_t = args['lambda_t']
+        self.beta = args['beta']
+
 
     def observer(self, epoches, IL):
         tasks = self.tasks
         performace_matrix = torch.zeros(len(tasks)+1, len(tasks)+1)
         for k in range(len(tasks)):
             task = tasks[k].to(self.device)
-            num_cls = torch.unique(task.y)[-1] + 1
-            n_new_examples = task.x[task.train_mask].shape[0]
+            num_cls = torch.unique(task.y)[-1]
+            self.model.train()
             for _ in range(epoches):
-                n_per_cls = [(task.y[task.train_mask] == cls).sum() for cls in range(num_cls)]
-                loss_w = [1. / max(i, 1) for i in n_per_cls]  # weight to balance the loss of different class
-                output = self.model(task)[task.train_mask, :num_cls]
-                ce = torch.nn.CrossEntropyLoss(weight=torch.tensor(loss_w).to(self.device))
-                loss = ce(output, task.y[task.train_mask])
+                output, _ = self.model(task)
+                loss = self.ce(output[task.train_mask, :num_cls+1], task.y[task.train_mask])
+                self.model.zero_grad()
+                loss.backward(retain_graph=True)
 
-                if k > 0:
+                grad_norm = 0
+                for p in self.model.parameters():
+                    pg = p.grad.data.clone()
+                    grad_norm += torch.norm(pg, p=1)
+
+                for k_ in range(k):
                     for i, p in enumerate(self.model.parameters()):
-                        l = self.reg * self.fisher[i]
-                        l = l * (p - self.optpar[i]).pow(2)
+                        l = self.lambda_l * self.fisher_loss[k_][i] + self.lambda_t * self.fisher_att[k_][i]
+                        l = l * (p - self.optpar[k_][i]).pow(2)
                         loss += l.sum()
 
-                self.model.zero_grad()
+                loss += self.beta * grad_norm
                 loss.backward()
                 self.opt.step()
             
-            self.optpar = []
-            new_fisher = []
-            output = self.model(task)[task.train_mask, :num_cls]
+            # After the last epoch.
+            self.fisher_loss[k] = []
+            self.fisher_att[k] = []
+            self.optpar[k] = []
 
-            output.pow_(2)
-            loss = output.mean()
+            output, att_w = self.model(task)
+            loss = self.ce(output[task.train_mask, :num_cls+1], task.y[task.train_mask])
             self.model.zero_grad()
-            loss.backward()
+            loss.backward(retain_graph=True)
 
             for p in self.model.parameters():
                 pd = p.data.clone()
                 pg = p.grad.data.clone().pow(2)
-                new_fisher.append(pg)
-                self.optpar.append(pd)
+                self.optpar[k].append(pd)
+                self.fisher_loss[k].append(pg)
 
-            if len(self.fisher) != 0:
-                for i, f in enumerate(new_fisher):
-                    self.fisher[i] = (self.fisher[i] * self.n_seen_examples + new_fisher[i] * n_new_examples) / (self.n_seen_examples + n_new_examples)
-                self.n_seen_examples += n_new_examples
-            else:
-                self.fisher = new_fisher
-                self.n_seen_examples = n_new_examples
+            eloss = torch.norm(att_w.storage._value)
+            eloss.backward()
+            for p in self.model.parameters():
+                pg = p.grad.data.clone().pow(2)
+                self.fisher_att[k].append(pg)
             
             accs = []
             AF = 0

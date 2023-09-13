@@ -21,16 +21,16 @@ class EWC():
         self.optpar = {}
         self.ce = torch.nn.CrossEntropyLoss()
 
-    def observer(self, epoches):
+    def observer(self, epoches, IL):
         tasks = self.tasks
         performace_matrix = torch.zeros(len(tasks)+1, len(tasks)+1)
         for k in range(len(tasks)):
             task = tasks[k].to(self.device)
-            max_cls = torch.unique(task.y)[-1]
+            num_cls = torch.unique(task.y)[-1]
 
             # Train
             for _ in range(epoches):
-                output = self.model(task)[task.train_mask, :max_cls+1]
+                output = self.model(task)[task.train_mask, :num_cls+1]
                 loss = self.ce(output, task.y[task.train_mask])  # main loss
                 # regularization item
                 for k_ in range(k):
@@ -44,7 +44,7 @@ class EWC():
                 self.opt.step()
 
             
-            output = self.model(task)[task.train_mask, :max_cls+1]
+            output = self.model(task)[task.train_mask, :num_cls+1]
             self.model.zero_grad()
             self.ce(output, task.y[task.train_mask]).backward()
 
@@ -61,8 +61,11 @@ class EWC():
             AF = 0
             for k_ in range(k + 1):
                 task_ = tasks[k_].to(self.device, "x", "y", "adj_t")
-                max_cls = torch.unique(task_.y)[-1]
-                acc = eval_node_classifier(self.model, task_, incremental_cls=(0, max_cls+1)) * 100
+                if IL == "classIL":
+                    acc = eval_node_classifier(self.model, task_, incremental_cls=(0, num_cls+1)) * 100
+                else:
+                    num_cls = torch.unique(task_.y)[-1]
+                    acc = eval_node_classifier(self.model, task_, incremental_cls=(num_cls+1-2, num_cls+1)) * 100
                 accs.append(acc)
                 task_.to("cpu")
                 print(f"T{k_} {acc:.2f}", end="|", flush=True)

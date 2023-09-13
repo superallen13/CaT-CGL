@@ -107,6 +107,8 @@ def main():
     parser.add_argument('--cgm-args', type=str, default="{}")
     parser.add_argument('--ewc-args', type=str, default="{'memory_strength': 10000.}")
     parser.add_argument('--mas-args', type=str, default="{'memory_strength': 10000.}")
+    parser.add_argument('--gem-args', type=str, default="{'memory_strength': 0.5, 'n_memories': 100}")
+    parser.add_argument('--twp-args', type=str, default="{'lambda_l': 10000., 'lambda_t': 10000., 'beta': 0.01}")
     parser.add_argument('--IL', type=str, default="classIL")
     parser.add_argument('--batch', action='store_true')
 
@@ -133,30 +135,29 @@ def main():
         data_stream = Streaming(args.cls_per_task, dataset)
         torch.save(data_stream, task_file)
 
-    if args.cgl_method == "ewc":
+    if args.cgl_method == "ewc" or args.cgl_method == "mas" or args.cgl_method == "gem" or args.cgl_method == "twp":
         APs = []
         AFs = []
         for i in range(args.repeat):
             model = get_backbone_model(dataset, data_stream, args)
             cgl_model = get_cgl_model(model, data_stream, args)
-            AP, AF = cgl_model.observer(args.cls_epoch)
+            AP, AF = cgl_model.observer(args.cls_epoch, args.IL)
             APs.append(AP)
             AFs.append(AF)
         print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}", flush=True)
         print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}", flush=True)
     
-    elif args.cgl_method == "mas":
+    elif args.cgl_method == "bare":
         APs = []
         AFs = []
         for i in range(args.repeat):
             model = get_backbone_model(dataset, data_stream, args)
             cgl_model = get_cgl_model(model, data_stream, args)
-            AP, AF = cgl_model.observer(args.cls_epoch)
+            AP, AF = cgl_model.observer(args.cls_epoch, args.IL)
             APs.append(AP)
             AFs.append(AF)
         print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}", flush=True)
         print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}", flush=True)
-
     else:
         # Get memory banks.
         memory_banks = []

@@ -2,17 +2,22 @@ from torch_geometric.datasets import CoraFull, Reddit
 from ogb.nodeproppred import PygNodePropPredDataset
 
 from backbones.gcn import GCN
-from backbones.gcn_wrong import GCN1
+from backbones.gat import GAT
 from methods.joint import Joint
+from methods.bare import Bare
 from methods.ergnn import ERGNN
 from methods.ssm import SSM
 from methods.cgm import CGM
 from methods.ewc import EWC
 from methods.mas import MAS
+from methods.gem import GEM
+from methods.twp import TWP
 
 
 def get_result_file_name(args):
     if args.cgl_method == "joint":
+        result_name = f""
+    elif args.cgl_method == "bare":
         result_name = f""
     elif args.cgl_method == "ergnn":
         result_name = f"_MFPlus"
@@ -27,6 +32,11 @@ def get_result_file_name(args):
     elif "mas" in args.cgl_method:
         mas_args = eval(args.mas_args)
         result_name = f"_memory_strength_{mas_args['memory_strength']}"
+    elif "gem" in args.cgl_method:
+        gem_args = eval(args.gem_args)
+        result_name = f"_memory_strength_{gem_args['memory_strength']}"
+    elif "twp" in args.cgl_method:
+        result_name = f""
     return f"{args.dataset_name}_{args.budget}_{args.cgl_method}" + result_name
 
 def print_performance_matrix(performace_matrix, m_update):
@@ -57,12 +67,17 @@ def get_dataset(args):
     return dataset
     
 def get_backbone_model(dataset, data_stream, args):
-    model = GCN(dataset.num_features, 512, data_stream.n_tasks * args.cls_per_task, 3).to(args.device)
+    if args.cgl_method == "twp":
+        model = GAT(dataset.num_features, 64, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
+    else:
+        model = GCN(dataset.num_features, 512, data_stream.n_tasks * args.cls_per_task, 3).to(args.device)
     return model
 
 def get_cgl_model(model, data_stream, args):
     if args.cgl_method == "joint":
         cgl_model = Joint(model, data_stream.tasks, None, args.m_update, args.device)
+    elif args.cgl_method == "bare":
+        cgl_model = Bare(model, data_stream.tasks, args.device)
     elif args.cgl_method == "ergnn":
         cgl_model = ERGNN(model, data_stream.tasks, args.budget, args.m_update, args.device)
     elif args.cgl_method == "ssm":
@@ -73,4 +88,8 @@ def get_cgl_model(model, data_stream, args):
         cgl_model = EWC(model, data_stream.tasks, args.device, eval(args.ewc_args))
     elif args.cgl_method == "mas":
         cgl_model = MAS(model, data_stream.tasks, args.device, eval(args.mas_args))
+    elif args.cgl_method == "gem":
+        cgl_model = GEM(model, data_stream.tasks, args.device, eval(args.gem_args))
+    elif args.cgl_method == "twp":
+        cgl_model = TWP(model, data_stream.tasks, args.device, eval(args.twp_args))
     return cgl_model
