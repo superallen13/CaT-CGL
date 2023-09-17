@@ -29,6 +29,7 @@ class CGM(Replay):
         self.feat_init = "randomChoice"
         self.feat_init = args["feat_init"]
         self.hop = args['hop']
+        self.activation = args['activation']
         
     def memorize(self, task, budgets):
         labels_cond = []
@@ -73,7 +74,7 @@ class CGM(Replay):
         for cls in task.classes:
             cls_train_masks.append((task.y == cls).logical_and(task.train_mask))   
         
-        encoder = Encoder(task.num_features, self.hid_dim, self.emb_dim, self.n_layers, self.hop).to(self.device)
+        encoder = Encoder(task.num_features, self.hid_dim, self.emb_dim, self.n_layers, self.hop, self.activation).to(self.device)
         for _ in range(self.n_encoders):
             encoder.initialize()
             with torch.no_grad():

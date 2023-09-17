@@ -30,10 +30,11 @@ class Linear(GCNConv):
     
 
 class Encoder(GNN):
-    def __init__(self, nin, nhid, nout, nlayers, hop):
+    def __init__(self, nin, nhid, nout, nlayers, hop, activation=True):
         super().__init__()
         self.feat_agg = None
         self.hop = hop
+        self.activation = activation  # True or False
         if nlayers == 1:
             self.layers.append(Linear(nin, nout))
         else:
@@ -46,7 +47,8 @@ class Encoder(GNN):
         self.eval()
         for layer in self.layers[:-1]:  # without the FC layer.
             x = layer(x)
-            x = F.relu(x)
+            if self.activation:
+                x = F.relu(x)
         return x
 
     def encode(self, x, adj_t):
@@ -60,5 +62,6 @@ class Encoder(GNN):
         x = self.feat_agg
         for i, layer in enumerate(self.layers[:-1]):  # without the FC layer.
             x = layer(x)
-            x = F.relu(x)
+            if self.activation:
+                x = F.relu(x)
         return x

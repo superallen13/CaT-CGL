@@ -4,23 +4,29 @@ from torch_geometric.data import Batch
 from backbones.gnn import train_node_classifier, eval_node_classifier
 
 # Utilities
-from progressbar import progressbar
-from methods.utility import get_graph_class_ratio
-from backbones.gcn import GCN
+import copy
+from torch.autograd import Variable
 
-class EWC():
+
+def MultiClassCrossEntropy(logits, labels, T):
+    labels = Variable(labels.data, requires_grad=False).cuda()
+    outputs = torch.log_softmax(logits/T, dim=1)   # compute the log of softmax values
+    labels = torch.softmax(labels/T, dim=1)
+    outputs = torch.sum(outputs * labels, dim=1, keepdim=False)
+    outputs = -torch.mean(outputs, dim=0, keepdim=False)
+    return outputs
+
+class LWF():
     def __init__(self, model, tasks, device, args):
         super().__init__()
         self.model = model
         self.tasks = tasks
         self.device = device
+        self.ce = torch.nn.CrossEntropyLoss()
         self.opt = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=5e-4)
 
-        # for EWC
-        self.reg = args['memory_strength']
-        self.fisher = {}
-        self.optpar = {}
-        self.ce = torch.nn.CrossEntropyLoss()
+        self.T = args['T']
+        self.lambda_dist = args['lambda_dist']
 
     def observer(self, epoches, IL):
         tasks = self.tasks
@@ -28,35 +34,25 @@ class EWC():
         APs = []
         for k in range(len(tasks)):
             task = tasks[k].to(self.device)
-            num_cls = torch.unique(task.y)[-1]
 
             # Train
             for _ in range(epoches):
-                output = self.model(task)[task.train_mask, :num_cls+1]
-                loss = self.ce(output, task.y[task.train_mask])  # main loss
-                # regularization item
-                for k_ in range(k):
-                    for i, p in enumerate(self.model.parameters()):
-                        l = self.reg * self.fisher[k_][i]
-                        l = l * (p - self.optpar[k_][i]).pow(2)
-                        loss += l.sum()
+                self.model.train()
+                num_cls = torch.unique(task.y)[-1] + 1
+                output = self.model(task)
+                loss = self.ce(output[task.train_mask, :num_cls], task.y[task.train_mask])
+                
+                if k > 0:
+                    num_cls_ = torch.unique(tasks[k-1].y)[-1] + 1
+                    target_ = prev_model(task)[task.train_mask, :num_cls_]
+                    dist_loss = MultiClassCrossEntropy(output[task.train_mask, :num_cls_], target_, self.T)
+                    loss += self.lambda_dist * dist_loss
 
-                self.model.zero_grad()
+                self.opt.zero_grad()
                 loss.backward()
                 self.opt.step()
-
             
-            output = self.model(task)[task.train_mask, :num_cls+1]
-            self.model.zero_grad()
-            self.ce(output, task.y[task.train_mask]).backward()
-
-            self.fisher[k] = []
-            self.optpar[k] = []
-            for p in self.model.parameters():
-                pd = p.data.clone()
-                pg = p.grad.data.clone().pow(2)
-                self.fisher[k].append(pg)
-                self.optpar[k].append(pd)
+            prev_model = copy.deepcopy(self.model)
             
             # Evaluation
             accs = []
@@ -73,8 +69,8 @@ class EWC():
                 # print(f"T{k_} {acc:.2f}", end="|", flush=True)
                 performace_matrix[k, k_] = acc
             AP = sum(accs) / len(accs)
-            APs.append(AP)
             # print(f"AP: {AP:.2f}", end=", ", flush=True)
+            APs.append(AP)
             for t in range(k):
                 AF += performace_matrix[k, t] - performace_matrix[t, t]
             AF = AF / k if k != 0 else AF

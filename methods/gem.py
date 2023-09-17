@@ -77,6 +77,7 @@ class GEM():
     def observer(self, epoches, IL):
         tasks = self.tasks
         performace_matrix = torch.zeros(len(tasks)+1, len(tasks)+1)
+        APs = []
         for k in range(len(tasks)):
             task = tasks[k]  # Load the incoming graph.
 
@@ -136,12 +137,13 @@ class GEM():
                     acc = eval_node_classifier(self.model, task_, incremental_cls=(num_cls+1-2, num_cls+1)) * 100
                 accs.append(acc)
                 task_.to("cpu")
-                print(f"T{k_} {acc:.2f}", end="|", flush=True)
+                # print(f"T{k_} {acc:.2f}", end="|", flush=True)
                 performace_matrix[k, k_] = acc
             AP = sum(accs) / len(accs)
-            print(f"AP: {AP:.2f}", end=", ", flush=True)
+            # print(f"AP: {AP:.2f}", end=", ", flush=True)
+            APs.append(APs)
             for t in range(k):
                 AF += performace_matrix[k, t] - performace_matrix[t, t]
             AF = AF / k if k != 0 else AF
-            print(f"AF: {AF:.2f}", flush=True)
-        return AP, AF
+            # print(f"AF: {AF:.2f}", flush=True)
+        return AP, np.mean(APs), AF

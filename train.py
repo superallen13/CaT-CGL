@@ -16,6 +16,7 @@ from backbones.gnn import train_node_classifier, train_node_classifier_batch, ev
 def evaluate(args, dataset, data_stream, memory_banks, flush=True):
     APs = []
     AFs = []
+    mAPs = []
     Ps = []
     for i in range(args.repeat):
         memory_bank = memory_banks[i]
@@ -26,6 +27,7 @@ def evaluate(args, dataset, data_stream, memory_banks, flush=True):
         tasks = cgl_model.tasks
 
         opt = torch.optim.Adam(model.parameters(), lr=0.005, weight_decay=5e-4)
+        mAP = 0
         for k in range(len(memory_bank)):
             # train
             if args.dataset_name == "products" and args.cgl_method == "joint":
@@ -75,18 +77,21 @@ def evaluate(args, dataset, data_stream, memory_banks, flush=True):
                     acc = eval_node_classifier(model, task_, incremental_cls=(max_cls+1-data_stream.cls_per_task, max_cls+1)) * 100
                 accs.append(acc)
                 task_.to("cpu")
-                print(f"T{k_} {acc:.2f}", end="|", flush=flush)
+                # print(f"T{k_} {acc:.2f}", end="|", flush=flush)
                 performace_matrix[k, k_] = acc
             AP = sum(accs) / len(accs)
-            print(f"AP: {AP:.2f}", end=", ", flush=flush)
+            mAP += AP
+            # print(f"AP: {AP:.2f}", end=", ", flush=flush)
             for t in range(k):
                 AF += performace_matrix[k, t] - performace_matrix[t, t]
             AF = AF / k if k != 0 else AF
-            print(f"AF: {AF:.2f}", flush=flush)
+            # print(f"AF: {AF:.2f}", flush=flush)
         APs.append(AP)
         AFs.append(AF)
+        mAPs.append(mAP/(k+1))
         Ps.append(performace_matrix)
     print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}", flush=flush)
+    print(f"mAP: {np.mean(mAPs):.1f}±{np.std(mAPs, ddof=1):.1f}", flush=flush)
     print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}", flush=flush)
     return Ps
 
@@ -105,10 +110,11 @@ def main():
     parser.add_argument('--budget', type=int, default=2)
     parser.add_argument('--m-update', type=str, default="all")
     parser.add_argument('--cgm-args', type=str, default="{}")
-    parser.add_argument('--ewc-args', type=str, default="{'memory_strength': 10000.}")
+    parser.add_argument('--ewc-args', type=str, default="{'memory_strength': 100000.}")
     parser.add_argument('--mas-args', type=str, default="{'memory_strength': 10000.}")
-    parser.add_argument('--gem-args', type=str, default="{'memory_strength': 0.5, 'n_memories': 100}")
+    parser.add_argument('--gem-args', type=str, default="{'memory_strength': 0.5, 'n_memories': 20}")
     parser.add_argument('--twp-args', type=str, default="{'lambda_l': 10000., 'lambda_t': 10000., 'beta': 0.01}")
+    parser.add_argument('--lwf-args', type=str, default="{'lambda_dist': 10., 'T': 20.}")
     parser.add_argument('--IL', type=str, default="classIL")
     parser.add_argument('--batch', action='store_true')
 
@@ -135,28 +141,19 @@ def main():
         data_stream = Streaming(args.cls_per_task, dataset)
         torch.save(data_stream, task_file)
 
-    if args.cgl_method == "ewc" or args.cgl_method == "mas" or args.cgl_method == "gem" or args.cgl_method == "twp":
+    if args.cgl_method in ["bare", "ewc", "mas", "gem", "twp", "lwf"]:
         APs = []
         AFs = []
+        mAPs = []
         for i in range(args.repeat):
             model = get_backbone_model(dataset, data_stream, args)
             cgl_model = get_cgl_model(model, data_stream, args)
-            AP, AF = cgl_model.observer(args.cls_epoch, args.IL)
+            AP, mAP, AF = cgl_model.observer(args.cls_epoch, args.IL)
             APs.append(AP)
             AFs.append(AF)
+            mAPs.append(mAP)
         print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}", flush=True)
-        print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}", flush=True)
-    
-    elif args.cgl_method == "bare":
-        APs = []
-        AFs = []
-        for i in range(args.repeat):
-            model = get_backbone_model(dataset, data_stream, args)
-            cgl_model = get_cgl_model(model, data_stream, args)
-            AP, AF = cgl_model.observer(args.cls_epoch, args.IL)
-            APs.append(AP)
-            AFs.append(AF)
-        print(f"AP: {np.mean(APs):.1f}±{np.std(APs, ddof=1):.1f}", flush=True)
+        print(f"mAP: {np.mean(mAPs):.1f}±{np.std(mAPs, ddof=1):.1f}", flush=True)
         print(f"AF: {np.mean(AFs):.1f}±{np.std(AFs, ddof=1):.1f}", flush=True)
     else:
         # Get memory banks.

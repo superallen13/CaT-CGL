@@ -12,30 +12,20 @@ from methods.ewc import EWC
 from methods.mas import MAS
 from methods.gem import GEM
 from methods.twp import TWP
+from methods.lwf import LWF
 
 
 def get_result_file_name(args):
-    if args.cgl_method == "joint":
-        result_name = f""
-    elif args.cgl_method == "bare":
-        result_name = f""
-    elif args.cgl_method == "ergnn":
+    if args.cgl_method == "ergnn":
         result_name = f"_MFPlus"
     elif args.cgl_method == "ssm":
         result_name = f"_random"
     elif "cgm" in args.cgl_method:
         cgm_args = eval(args.cgm_args)
         result_name = f"_{cgm_args['feat_init']}_feat_{cgm_args['feat_lr']}_{cgm_args['n_encoders']}_{cgm_args['n_layers']}_layer_{cgm_args['hid_dim']}_GCN_hop_{cgm_args['hop']}"
-    elif "ewc" in args.cgl_method:
-        ewc_args = eval(args.ewc_args)
-        result_name = f"_memory_strength_{ewc_args['memory_strength']}"
-    elif "mas" in args.cgl_method:
-        mas_args = eval(args.mas_args)
-        result_name = f"_memory_strength_{mas_args['memory_strength']}"
-    elif "gem" in args.cgl_method:
-        gem_args = eval(args.gem_args)
-        result_name = f"_memory_strength_{gem_args['memory_strength']}"
-    elif "twp" in args.cgl_method:
+        if cgm_args['activation'] == False:
+            result_name += "_nonact"
+    else:
         result_name = f""
     return f"{args.dataset_name}_{args.budget}_{args.cgl_method}" + result_name
 
@@ -70,7 +60,7 @@ def get_backbone_model(dataset, data_stream, args):
     if args.cgl_method == "twp":
         model = GAT(dataset.num_features, 64, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
     else:
-        model = GCN(dataset.num_features, 512, data_stream.n_tasks * args.cls_per_task, 3).to(args.device)
+        model = GCN(dataset.num_features, 256, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
     return model
 
 def get_cgl_model(model, data_stream, args):
@@ -92,4 +82,6 @@ def get_cgl_model(model, data_stream, args):
         cgl_model = GEM(model, data_stream.tasks, args.device, eval(args.gem_args))
     elif args.cgl_method == "twp":
         cgl_model = TWP(model, data_stream.tasks, args.device, eval(args.twp_args))
+    elif args.cgl_method == "lwf":
+        cgl_model = LWF(model, data_stream.tasks, args.device, eval(args.lwf_args))
     return cgl_model
