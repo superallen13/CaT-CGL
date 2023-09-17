@@ -58,12 +58,6 @@ def evaluate(args, dataset, data_stream, memory_banks, flush=True):
                     replayed_graphs.to(args.device, "x", "y", "adj_t")
                     max_cls = torch.unique(replayed_graphs.y)[-1]
                     model = train_node_classifier(model, replayed_graphs, opt, weight=None, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
-
-
-                # n_per_cls = [(replayed_graphs.y == cls).nonzero().sum() for cls in torch.unique(replayed_graphs.y)]
-                # loss_w_ = [1. / max(i, 1) for i in n_per_cls] 
-                # loss_w_ = torch.tensor(loss_w_).to(args.device)
-                # model = train_node_classifier(model, replayed_graphs, opt, weight=loss_w_, n_epoch=args.cls_epoch, incremental_cls=(0, max_cls+1))
                
             # Test the model from task 0 to task k
             accs = []
@@ -77,15 +71,15 @@ def evaluate(args, dataset, data_stream, memory_banks, flush=True):
                     acc = eval_node_classifier(model, task_, incremental_cls=(max_cls+1-data_stream.cls_per_task, max_cls+1)) * 100
                 accs.append(acc)
                 task_.to("cpu")
-                # print(f"T{k_} {acc:.2f}", end="|", flush=flush)
+                print(f"T{k_} {acc:.2f}", end="|", flush=flush)
                 performace_matrix[k, k_] = acc
             AP = sum(accs) / len(accs)
             mAP += AP
-            # print(f"AP: {AP:.2f}", end=", ", flush=flush)
+            print(f"AP: {AP:.2f}", end=", ", flush=flush)
             for t in range(k):
                 AF += performace_matrix[k, t] - performace_matrix[t, t]
             AF = AF / k if k != 0 else AF
-            # print(f"AF: {AF:.2f}", flush=flush)
+            print(f"AF: {AF:.2f}", flush=flush)
         APs.append(AP)
         AFs.append(AF)
         mAPs.append(mAP/(k+1))
@@ -174,14 +168,14 @@ def main():
         
         if args.tim:
             if args.batch:
-                torch.save(Ps, os.path.join(args.result_path, "performance", f"{result_file_name}_tim_batch.pt"))
+                torch.save(Ps, os.path.join(args.result_path, "performance_new", f"{result_file_name}_tim_batch.pt"))
             else:
-                torch.save(Ps, os.path.join(args.result_path, "performance", f"{result_file_name}_tim.pt"))
+                torch.save(Ps, os.path.join(args.result_path, "performance_new", f"{result_file_name}_tim.pt"))
         else:
             if args.batch:
-                torch.save(Ps, os.path.join(args.result_path, "performance", f"{result_file_name}_batch.pt"))
+                torch.save(Ps, os.path.join(args.result_path, "performance_new", f"{result_file_name}_batch.pt"))
             else:
-                torch.save(Ps, os.path.join(args.result_path, "performance", f"{result_file_name}.pt"))
+                torch.save(Ps, os.path.join(args.result_path, "performance_new", f"{result_file_name}.pt"))
 
 
 if __name__ == '__main__':

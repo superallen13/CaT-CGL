@@ -1,13 +1,7 @@
 import torch
 import numpy as np
-from torch_geometric.data import Batch
-from torch import linalg as LA
-from backbones.gat import train_node_classifier, eval_node_classifier
+from backbones.gat import eval_node_classifier
 
-# Utilities
-from progressbar import progressbar
-from methods.utility import get_graph_class_ratio
-from backbones.gcn import GCN
 
 class TWP():
     def __init__(self, model, tasks, device, args):
@@ -91,13 +85,13 @@ class TWP():
                     acc = eval_node_classifier(self.model, task_, incremental_cls=(num_cls+1-2, num_cls+1)) * 100
                 accs.append(acc)
                 task_.to("cpu")
-                # print(f"T{k_} {acc:.2f}", end="|", flush=True)
+                print(f"T{k_} {acc:.2f}", end="|", flush=True)
                 performace_matrix[k, k_] = acc
             AP = sum(accs) / len(accs)
-            # print(f"AP: {AP:.2f}", end=", ", flush=True)
+            print(f"AP: {AP:.2f}", end=", ", flush=True)
             APs.append(AP)
             for t in range(k):
                 AF += performace_matrix[k, t] - performace_matrix[t, t]
             AF = AF / k if k != 0 else AF
-            # print(f"AF: {AF:.2f}", flush=True)
+            print(f"AF: {AF:.2f}", flush=True)
         return AP, np.mean(APs), AF

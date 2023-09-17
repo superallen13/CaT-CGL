@@ -58,7 +58,7 @@ def get_dataset(args):
     
 def get_backbone_model(dataset, data_stream, args):
     if args.cgl_method == "twp":
-        model = GAT(dataset.num_features, 64, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
+        model = GAT(dataset.num_features, 32, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
     else:
         model = GCN(dataset.num_features, 256, data_stream.n_tasks * args.cls_per_task, 2).to(args.device)
     return model
