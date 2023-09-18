@@ -18,7 +18,7 @@ progressbar2==4.2.0  # for visulasing the process of CGL
 ```
 
 # Usage
-To reproduce the results of Table 2 (classIL setting), please run the `table1.sh` in the `srcripts` folder:
+To reproduce the results of Table 2 (classIL setting), please run the `table2.sh` in the `srcripts` folder:
 ```
 run .\srcripts\table2.sh
 ```
