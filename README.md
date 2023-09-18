@@ -1,8 +1,13 @@
 # CaT (Condense and Train)
-
 This is the offical repository for the paper **CaT: Balanced Continual Graph Learning with Graph Condensation**
 
-# Environments
+The following figure compares the typical replay-based CGL and CaT in the class incremental setting.
+![CaT Framework](./figs/fig2.jpg)
+
+# Main experiment results.
+![class-IL results](./figs/table2.jpg)
+
+# Experiment environment
 Our experiments are run on the enviroment based on `Python 3.8` with the following packages:
 
 ```
@@ -13,10 +18,9 @@ progressbar2==4.2.0  # for visulasing the process of CGL
 ```
 
 # Usage
-
 To reproduce the results of Table 2 (classIL setting), please run the `table1.sh` in the `srcripts` folder:
 ```
-run .\srcripts\table1.sh
+run .\srcripts\table2.sh
 ```
 
 # Cite
