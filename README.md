@@ -1,5 +1,5 @@
 # CaT (Condense and Train)
-This is the offical repository for the paper **CaT: Balanced Continual Graph Learning with Graph Condensation**
+This is the offical repository for the paper [CaT: Balanced Continual Graph Learning with Graph Condensation](https://arxiv.org/abs/2309.09455). This paper has accepated by ICDM 2023.
 
 The following figure compares the typical replay-based CGL and CaT in the class incremental setting.
 ![CaT Framework](./figs/fig2.jpg)
@@ -32,7 +32,8 @@ If you find this repo useful, please cite
                Ruihong Qiu and
                Zi Huang},
   title     = {CaT: Balanced Continual Graph Learning with Graph Condensation},
-  journal   = {ICDM},
+  journal   = {CoRR},
+  volume    = {abs/2309.09455},
   year      = {2023}
 }
 ```
