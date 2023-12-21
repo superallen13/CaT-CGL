@@ -6,7 +6,6 @@ from torch_sparse import SparseTensor
 from progressbar import progressbar
 
 
-
 class Streaming():
     def __init__(self, cls_per_task, dataset):
         self.cls_per_task = cls_per_task
@@ -20,7 +19,7 @@ class Streaming():
         for k in progressbar(range(n_tasks), redirect_stdout=True): 
             start_cls = k * self.cls_per_task
             classes = list(range(start_cls, start_cls + self.cls_per_task))
-            subset = sum(graph.y == cls for cls in classes).squeeze().nonzero(as_tuple=False)
+            subset = sum(graph.y == cls for cls in classes).nonzero(as_tuple=False).squeeze()
             subgraph = graph.subgraph(subset)
             
             # Split to train/val/test
